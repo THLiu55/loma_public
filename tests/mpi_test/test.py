@@ -21,7 +21,11 @@ class Homework3Test(unittest.TestCase):
 
 
     def test_parallel_add_mpi(self):
-        lib = ctypes.CDLL("./librev_add.so")
+        # lib = ctypes.CDLL("./librev_add.so")
+        with open('../loma_code/parallel_add.py') as f:
+            structs, lib = compiler.compile(f.read(),
+                                            target = 'mpi',
+                                            output_filename = '_code/parallel_add')
         lib.rev_parallel_add_mpi.argtypes = [
             ctypes.POINTER(ctypes.c_float),  # x
             ctypes.POINTER(ctypes.c_float),  # _dx_
