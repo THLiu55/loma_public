@@ -78,3 +78,76 @@ int main(int argc, char **argv) {
     MPI_Finalize();
     return 0;
 }
+
+export void rev_parallel_add_mpi(float* x,
+                                 float* _dx_,
+                                 float* y,
+                                 float* _dy_,
+                                 float* z,
+                                 int    total_work)
+{
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    /* ---------- 与 forward 保持一致的分区 ---------- */
+    int base_work = total_work / size;
+    int extra     = total_work % size;                 /* 把余数分到前 extra 个进程 */
+    int start     = base_work * rank + (rank < extra ? rank : extra);
+    int end       = start + base_work + (rank < extra ? 1 : 0);
+    int local_work = end - start;
+
+    /* ---------- 根进程提前准备 Scatterv/Gatherv 参数 ---------- */
+    int *sendcounts = NULL, *displs = NULL;
+    if (rank == 0) {
+        sendcounts = (int*)malloc(size * sizeof(int));
+        displs     = (int*)malloc(size * sizeof(int));
+        for (int i = 0, offset = 0; i < size; ++i) {
+            int len = base_work + (i < extra ? 1 : 0);
+            sendcounts[i] = len;
+            displs[i]     = offset;
+            offset       += len;
+        }
+    }
+
+    /* ---------- 为本地片段分配缓冲 ---------- */
+    float *z_local  = (float*)malloc(local_work * sizeof(float));
+    float *dx_local = (float*)calloc(local_work, sizeof(float));   /* 初值 0 */
+    float *dy_local = (float*)calloc(local_work, sizeof(float));
+
+    /* ---------- 把 z（正向结果）分发到各 rank ---------- */
+    MPI_Scatterv(z,  sendcounts, displs, MPI_FLOAT,
+                 z_local,  local_work, MPI_FLOAT,
+                 0, MPI_COMM_WORLD);
+
+    /* 如果想在反向阶段继续累加已有梯度，可把 _dx_/ _dy_ 也 Scatter 下来。
+       若梯度在此函数之前尚未被写入，一般保持 0 即可： */
+    // MPI_Scatterv(_dx_, sendcounts, displs, MPI_FLOAT,
+    //              dx_local, local_work, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    // MPI_Scatterv(_dy_, sendcounts, displs, MPI_FLOAT,
+    //              dy_local, local_work, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+    /* ---------- 反向本地计算：dx += z, dy += z ---------- */
+    for (int i = 0; i < local_work; ++i) {
+        dx_local[i] += z_local[i];
+        dy_local[i] += z_local[i];
+    }
+
+    /* ---------- 把局部梯度收集回根进程 ---------- */
+    MPI_Gatherv(dx_local, local_work, MPI_FLOAT,
+                _dx_, sendcounts, displs, MPI_FLOAT,
+                0, MPI_COMM_WORLD);
+
+    MPI_Gatherv(dy_local, local_work, MPI_FLOAT,
+                _dy_, sendcounts, displs, MPI_FLOAT,
+                0, MPI_COMM_WORLD);
+
+    /* ---------- 清理 ---------- */
+    free(z_local);
+    free(dx_local);
+    free(dy_local);
+    if (rank == 0) {
+        free(sendcounts);
+        free(displs);
+    }
+}
