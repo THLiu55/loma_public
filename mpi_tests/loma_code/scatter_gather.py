@@ -12,7 +12,7 @@ def scatter_process_gather(global_arr : InOut[Array[float]], total_size : In[int
 
     # ② 每进程独立处理
     i : int
-    for i in range(chunk):
+    while (i < chunk, max_iter := chunk):
         local[i] = local[i] * 2.0
 
     # ③ GATHER：把处理结果收回根进程
