@@ -2,7 +2,7 @@
 import sys
 import os
 current = os.path.dirname(os.path.realpath(__file__))
-parent  = os.path.dirname(os.path.dirname(current))
+parent  = os.path.dirname(current)
 sys.path.append(parent)
 
 import compiler
@@ -18,7 +18,7 @@ class ScatterProcessGatherTest(unittest.TestCase):
 
     def test_scatter_process_gather_mpi(self):
         # 1) 编译 Loma 源码生成 MPI 动态库
-        with open('../loma_code/scatter_process_gather.py') as f:
+        with open('loma_code/scatter_gather.py') as f:
             structs, lib = compiler.compile(
                 f.read(),
                 target='mpi',
