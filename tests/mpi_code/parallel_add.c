@@ -128,7 +128,7 @@ export void rev_parallel_add_mpi(float* x,
     //              dy_local, local_work, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
     /* ---------- 反向本地计算：dx += z, dy += z ---------- */
-    for (int i = 0; i < local_work; ++i) {
+    for (int i = 0; i < local_work; ++i) { 
         dx_local[i] += z_local[i];
         dy_local[i] += z_local[i];
     }

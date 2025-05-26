@@ -291,6 +291,10 @@ class TypeInferencer(irmutator.IRMutator):
             inf_type = None
         elif call.id == 'mpi_size':
             inf_type = None
+        elif call.id == 'init_mpi_env':
+            if len(args) != 2:
+                raise error.CallTypeMismatch(call)
+            inf_type = None
         else:
             if call.id not in self.funcs:
                 raise error.CallIDNotFound(call)

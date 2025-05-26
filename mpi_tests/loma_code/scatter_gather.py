@@ -5,7 +5,9 @@ def scatter_process_gather(global_arr : Out[Array[float]], total_size : In[int])
     nproc : int
     mpi_size(nproc)
 
-    chunk : int = total_size / nproc          # 每段长度
+    chunk : int = total_size / nproc   
+    
+    init_mpi_env(rank, nproc)
 
     # 本地缓冲区
     local : Array[float, 5000]

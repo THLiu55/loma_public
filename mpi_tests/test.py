@@ -26,7 +26,7 @@ class ScatterProcessGatherTest(unittest.TestCase):
             )
 
         # 2) 函数原型：void scatter_process_gather_mpi(float* global, int total_size)
-        lib.scatter_process_gather_mpi.argtypes = [
+        lib.scatter_process_gather.argtypes = [
             ctypes.POINTER(ctypes.c_float),  # global_arr（仅 root 有效）
             ctypes.c_int                     # total_size
         ]
@@ -49,7 +49,7 @@ class ScatterProcessGatherTest(unittest.TestCase):
             global_ptr = None                            # 非 root 传 NULL
 
         # 4) 调用生成的 MPI 函数
-        lib.scatter_process_gather_mpi(global_ptr, n)
+        lib.scatter_process_gather(global_ptr, n)
 
         # 5) 同步 & 断言
         MPI.COMM_WORLD.Barrier()

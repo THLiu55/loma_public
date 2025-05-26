@@ -55,6 +55,22 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
     # ---------- expression ----------
     def visit_expr(self, node):
         print(f'Visiting expression: {node}')
+        if isinstance(node, loma_ir.Call) and node.id == 'init_mpi_env':
+            code = "\tint* sendcounts = NULL;\n"
+            code += "\tint* displs = NULL;\n"
+            code += f"\tif ({node.args[0].id} == 0) {{\n"
+            code += "\t        sendcounts = malloc(nproc * sizeof(int));\n"
+            code += "\t        displs     = malloc(nproc * sizeof(int));\n"
+            code += f"\t        int base = {node.args[1].id} / nproc;\n"
+            code += f"\t        int extra = {node.args[1].id} % nproc;\n"
+            code += "\t        int offset = 0;\n"
+            code += "\t        for (int i = 0; i < nproc; i++) {\n"
+            code += "\t            sendcounts[i] = base + (i < extra ? 1 : 0);\n"
+            code += "\t            displs[i] = offset;\n"
+            code += "\t            offset += sendcounts[i];\n"
+            code += "\t        }\n"
+            code += "\t    }"
+            return code
         match node:
             case loma_ir.Call():
                 if node.id == 'atomic_add':
@@ -78,7 +94,7 @@ def codegen_mpi(structs: dict[str, loma_ir.Struct],
     """
     code = ''
     # 头文件
-    code += '#include <mpi.h>\n#include <math.h>\n\n'
+    code += '#include <mpi.h>\n#include <math.h>\n#include <stdlib.h>\n\n'
 
     ctype_structs = compiler.topo_sort_structs(structs)
 
