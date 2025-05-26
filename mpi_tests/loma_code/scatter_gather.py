@@ -5,7 +5,7 @@ def scatter_process_gather(global_arr : Out[Array[float]], total_size : In[int])
     chunk : int = total_size / nproc          # 每段长度
 
     # 本地缓冲区
-    local : Array[float, dynamic] = alloc_array_float(5000)
+    local : Array[float, 5000]
 
     # ① SCATTER：根进程把 global_arr 拆分给各进程
     scatter(global_arr, local, total_size)

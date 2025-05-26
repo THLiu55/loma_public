@@ -66,6 +66,12 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
                         a0 = self.visit_expr(node.args[0])
                         a1 = self.visit_expr(node.args[1])
                         return f'/* atomic_add naive */ ({a0} += {a1})'
+                elif node.id == 'mpi_rank':
+                    return self.rank_var
+                elif node.id == 'mpi_size':
+                    return self.size_var
+                
+
         return super().visit_expr(node)
 
 

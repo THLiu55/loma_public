@@ -269,7 +269,9 @@ def check_call_in_call_stmt(node : loma_ir.func,
                 node.id == 'float2int' or \
                 node.id == 'pow' or \
                 node.id == 'thread_id' or \
-                node.id == 'atomic_add':
+                node.id == 'atomic_add' or \
+                node.id == 'mpi_rank' or \
+                node.id == 'mpi_size':
                 return
 
             if not self.in_call_stmt:

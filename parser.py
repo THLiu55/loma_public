@@ -6,6 +6,15 @@ import _asdl.loma as loma_ir
 import attrs
 import error
 
+def log(title: str, msg: str):
+    """ Log a message to the console.
+        This is a placeholder for a more sophisticated logging system.
+    """
+    print("*******************")
+    print(title)
+    print(msg)
+    print("*******************")
+
 def annotation_to_inout(arg) -> loma_ir.inout:
     """ Determine whether the function argument
         is input or output.
@@ -29,6 +38,8 @@ def annotation_to_type(node) -> loma_ir.type:
     """ Given a Python AST node, returns the corresponding
         loma type
     """
+
+    log('annotation_to_type', f'node: {ast.dump(node)}')
 
     match node:
         case ast.Name():
