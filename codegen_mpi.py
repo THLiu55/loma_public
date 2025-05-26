@@ -36,9 +36,6 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
         self.tab_count += 1
 
         # 插入 rank / size
-        self.emit_tabs(); self.code += f'int {self.rank_var}, {self.size_var};\n'
-        self.emit_tabs(); self.code += f'MPI_Comm_rank(MPI_COMM_WORLD, &{self.rank_var});\n'
-        self.emit_tabs(); self.code += f'MPI_Comm_size(MPI_COMM_WORLD, &{self.size_var});\n'
 
         # 处理函数体
         for stmt in node.body:
@@ -57,20 +54,18 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
 
     # ---------- expression ----------
     def visit_expr(self, node):
+        print(f'Visiting expression: {node}')
         match node:
             case loma_ir.Call():
-                if node.id == 'thread_id':
-                    return self.rank_var
-                elif node.id == 'atomic_add':
+                if node.id == 'atomic_add':
                     if self.is_output_arg(node.args[0]):
                         a0 = self.visit_expr(node.args[0])
                         a1 = self.visit_expr(node.args[1])
                         return f'/* atomic_add naive */ ({a0} += {a1})'
                 elif node.id == 'mpi_rank':
-                    return self.rank_var
+                    return f'MPI_Comm_rank(MPI_COMM_WORLD, &{node.args[0].id})'
                 elif node.id == 'mpi_size':
-                    return self.size_var
-                
+                    return f'MPI_Comm_size(MPI_COMM_WORLD, &{node.args[0].id})'
 
         return super().visit_expr(node)
 
