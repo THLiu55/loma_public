@@ -28,6 +28,9 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
             self.code += f'{codegen_c.type_to_string(arg)} {arg.id}'
         self.code += ') {\n'
 
+        self.emit_tabs()
+        self.code +=  "MPI_Init(NULL, NULL);\n"
+
         # 记录输出参数
         self.byref_args = {arg.id for arg in node.args
                            if arg.i == loma_ir.Out() and not isinstance(arg.t, loma_ir.Array)}
@@ -40,6 +43,9 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
         # 处理函数体
         for stmt in node.body:
             self.visit_stmt(stmt)
+
+        self.emit_tabs()
+        self.code +=  "MPI_Finalize();\n"
 
         self.tab_count -= 1
         self.emit_tabs(); self.code += '}\n'

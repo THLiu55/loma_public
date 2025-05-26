@@ -19,6 +19,7 @@ def scatter_process_gather(global_arr : Out[Array[float]], total_size : In[int])
     i : int
     while (i < chunk, max_iter := 5000):
         local[i] = local[i] * 2.0
+        i = i + 1
 
     # ③ GATHER：把处理结果收回根进程
     # gather(local, global_arr, total_size)
