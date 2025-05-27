@@ -2,6 +2,7 @@
 import codegen_c
 import _asdl.loma as loma_ir
 import compiler
+from reverse_diff import random_id_generator
 
 # ------------  Code-gen Visitor  ------------
 class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
@@ -22,14 +23,16 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
     # ---------- function ----------
     def visit_function_def(self, node):
         # 函数签名
+        self.total_size_var = '_mpi_total_size_' + random_id_generator(1)
         self.code += f'{codegen_c.type_to_string(node.ret_type)} {node.id}('
         for i, arg in enumerate(node.args):
             if i: self.code += ', '
             self.code += f'{codegen_c.type_to_string(arg)} {arg.id}'
+        if len(node.args) > 0:
+            self.code += ', '
+        self.code += f'int {self.total_size_var}'
         self.code += ') {\n'
 
-        self.emit_tabs()
-        self.code +=  "MPI_Init(NULL, NULL);\n"
 
         # 记录输出参数
         self.byref_args = {arg.id for arg in node.args
@@ -38,14 +41,17 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
 
         self.tab_count += 1
 
+        self.emit_tabs()
+        self.code +=  "MPI_Init(NULL, NULL);\n"
+
         # 插入 rank / size
 
         # 处理函数体
         for stmt in node.body:
             self.visit_stmt(stmt)
 
-        self.emit_tabs()
-        self.code +=  "MPI_Finalize();\n"
+        # self.emit_tabs()
+        # self.code +=  "MPI_Finalize();\n"
 
         self.tab_count -= 1
         self.emit_tabs(); self.code += '}\n'
@@ -60,20 +66,26 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
 
     # ---------- expression ----------
     def visit_expr(self, node):
-        print(f'Visiting expression: {node}')
         if isinstance(node, loma_ir.Call) and node.id == 'init_mpi_env':
-            code = "\tint* sendcounts = NULL;\n"
-            code += "\tint* displs = NULL;\n"
+            self.sendcounts_var = 'sendcounts_' + random_id_generator()
+            self.displs_var = 'displs_' + random_id_generator()
+            self.recv_counts_var = 'recvcounts_' + random_id_generator()
+            self.mpi_base_var = 'mpi_base_' + random_id_generator()
+            self.mpi_extra_var = 'mpi_extra_' + random_id_generator()
+
+            code = f"\tint* {self.sendcounts_var} = NULL;\n"
+            code += f"\tint* {self.displs_var} = NULL;\n"
+            code += f"\t        int {self.mpi_base_var} = {self.total_size_var} / {node.args[1].id} ;\n"
+            code += f"\t        int {self.mpi_extra_var} = {self.total_size_var} % {node.args[1].id};\n"
+            code += f"\tint {self.recv_counts_var} =  {self.mpi_base_var} + ({node.args[0].id} < {self.mpi_extra_var}  ? 1 : 0);\n"
             code += f"\tif ({node.args[0].id} == 0) {{\n"
-            code += "\t        sendcounts = malloc(nproc * sizeof(int));\n"
-            code += "\t        displs     = malloc(nproc * sizeof(int));\n"
-            code += f"\t        int base = {node.args[1].id} / nproc;\n"
-            code += f"\t        int extra = {node.args[1].id} % nproc;\n"
+            code += f"\t        {self.sendcounts_var} = malloc({node.args[1].id} * sizeof(int));\n"
+            code += f"\t         {self.displs_var}      = malloc({node.args[1].id} * sizeof(int));\n"
             code += "\t        int offset = 0;\n"
-            code += "\t        for (int i = 0; i < nproc; i++) {\n"
-            code += "\t            sendcounts[i] = base + (i < extra ? 1 : 0);\n"
-            code += "\t            displs[i] = offset;\n"
-            code += "\t            offset += sendcounts[i];\n"
+            code += f"\t        for (int i = 0; i < {node.args[1].id}; i++) {{\n"
+            code += f"\t            {self.sendcounts_var}[i] = {self.mpi_base_var} + (i < {self.mpi_extra_var}  ? 1 : 0);\n"
+            code += f"\t             {self.displs_var}[i] = offset;\n"
+            code += f"\t            offset += {self.sendcounts_var}[i];\n"
             code += "\t        }\n"
             code += "\t    }"
             return code
@@ -88,6 +100,33 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
                     return f'MPI_Comm_rank(MPI_COMM_WORLD, &{node.args[0].id})'
                 elif node.id == 'mpi_size':
                     return f'MPI_Comm_size(MPI_COMM_WORLD, &{node.args[0].id})'
+                elif node.id == 'mpi_total_size':
+                    return f'{self.total_size_var}'
+                elif node.id == 'scatter':
+                    # global_arr, local, total_size
+                    src = self.visit_expr(node.args[0])   # global_arr
+                    dst = self.visit_expr(node.args[1])   # local
+
+                    # 生成：MPI_Scatterv(...)
+                    return (
+                        f'MPI_Scatterv('
+                        f'{src}, {self.sendcounts_var}, {self.displs_var}, MPI_FLOAT, '
+                        f'{dst}, {self.recv_counts_var}, MPI_FLOAT, '
+                        f'0, MPI_COMM_WORLD)'
+                    )
+                elif node.id == 'gather':
+                    # gather(local, global_arr, total_size)
+                    src = self.visit_expr(node.args[0])   # local
+                    dst = self.visit_expr(node.args[1])   # global_arr
+                    return (
+                        f'MPI_Gatherv('
+                        f'{src}, {self.recv_counts_var}, MPI_FLOAT, '
+                        f'{dst}, {self.sendcounts_var}, {self.displs_var}, MPI_FLOAT, '
+                        f'0, MPI_COMM_WORLD)'
+                    )
+                elif node.id == 'mpi_chunk_size':
+                    return f'({self.recv_counts_var})'
+
 
         return super().visit_expr(node)
 
@@ -117,6 +156,10 @@ def codegen_mpi(structs: dict[str, loma_ir.Struct],
         for i, arg in enumerate(f.args):
             if i: code += ', '
             code += f'{codegen_c.type_to_string(arg)} {arg.id}'
+        if f.is_simd:
+            if len(f.args) > 0:
+                code += ', '
+            code += 'int total_work'
         code += ');\n'
     code += '\n'
 

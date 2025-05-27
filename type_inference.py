@@ -295,6 +295,23 @@ class TypeInferencer(irmutator.IRMutator):
             if len(args) != 2:
                 raise error.CallTypeMismatch(call)
             inf_type = None
+        elif call.id == 'mpi_total_size':
+            if len(args) != 0:
+                raise error.CallTypeMismatch(call)
+            inf_type = loma_ir.Int()
+        elif call.id == 'scatter':
+            if len(args) != 2:
+                raise error.CallTypeMismatch(call)
+
+            inf_type = None
+        elif call.id == 'gather':
+            if len(args) != 2:
+                raise error.CallTypeMismatch(call)
+            inf_type = None
+        elif call.id == 'mpi_chunk_size':
+            if len(args) != 0:
+                raise error.CallTypeMismatch(call)
+            inf_type = loma_ir.Int()
         else:
             if call.id not in self.funcs:
                 raise error.CallIDNotFound(call)
