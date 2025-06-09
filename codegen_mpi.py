@@ -16,15 +16,25 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
         * atomic_add ➜ 简单 +=（如需严格原子性可再插入 MPI_Reduce）
     """
 
+
     def __init__(self, func_defs):
         super().__init__(func_defs)
         self.rank_var = "rank"
         self.size_var = "size"
 
+
     # ---------- function ----------
-    def visit_function_def(self, node):
+    def visit_function_def(self, node):        
         # 函数签名
         self.total_size_var = '_mpi_total_size_' + random_id_generator(1)
+        # Pre‑generate helper variable names once per function so they are
+        # available to any later expression (e.g., mpi_chunk_size) even if
+        # init_mpi_env has not been visited yet.
+        self.sendcounts_var = 'sendcounts_' + random_id_generator()
+        self.displs_var    = 'displs_'    + random_id_generator()
+        self.recv_counts_var = 'recvcounts_' + random_id_generator()
+        self.mpi_base_var  = 'mpi_base_'  + random_id_generator()
+        self.mpi_extra_var = 'mpi_extra_' + random_id_generator()
         self.code += f'{codegen_c.type_to_string(node.ret_type)} {node.id}('
         for i, arg in enumerate(node.args):
             if i: self.code += ', '
@@ -33,6 +43,9 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
             self.code += ', '
         self.code += f'int {self.total_size_var}'
         self.code += ') {\n'
+
+        print(self.code)
+
 
 
         # 记录输出参数
@@ -68,12 +81,6 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
     # ---------- expression ----------
     def visit_expr(self, node):
         if isinstance(node, loma_ir.Call) and node.id == 'init_mpi_env':
-            self.sendcounts_var = 'sendcounts_' + random_id_generator()
-            self.displs_var = 'displs_' + random_id_generator()
-            self.recv_counts_var = 'recvcounts_' + random_id_generator()
-            self.mpi_base_var = 'mpi_base_' + random_id_generator()
-            self.mpi_extra_var = 'mpi_extra_' + random_id_generator()
-
             code = f"\tint* {self.sendcounts_var} = NULL;\n"
             code += f"\tint* {self.displs_var} = NULL;\n"
             code += f"\t        int {self.mpi_base_var} = {self.total_size_var} / {node.args[1].id} ;\n"
@@ -107,8 +114,6 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
                     # global_arr, local, total_size
                     src = self.visit_expr(node.args[0])   # global_arr
                     dst = self.visit_expr(node.args[1])   # local
-
-                    # 生成：MPI_Scatterv(...)
                     return (
                         f'MPI_Scatterv('
                         f'{src}, {self.sendcounts_var}, {self.displs_var}, MPI_FLOAT, '
@@ -127,8 +132,7 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
                     )
                 elif node.id == 'mpi_chunk_size':
                     return f'({self.recv_counts_var})'
-
-
+        
         return super().visit_expr(node)
 
 

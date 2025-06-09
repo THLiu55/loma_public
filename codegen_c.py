@@ -107,6 +107,7 @@ class CCodegenVisitor(irvisitor.IRVisitor):
             assert node.t.static_size != None
             self.code += f'{type_to_string(node.t.t)} {node.target}[{node.t.static_size}]'
         if node.val is not None:
+            print(node)
             self.code += f' = {self.visit_expr(node.val)};\n'
         else:
             self.code += ';\n'

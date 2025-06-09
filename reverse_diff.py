@@ -346,8 +346,10 @@ def reverse_diff(diff_func_id : str,
         
 
         def mutate_call_stmt(self, node):
-            if node.call.id == 'atomic_add':
+            if node.call.id in {'atomic_add'}:
                 return []
+            if node.call.id in {'mpi_rank', 'mpi_size', 'mpi_chunk_size', 'init_mpi_env', 'scatter', 'gather'}:
+                return [node]
             original_func = funcs[node.call.id]
             cache_primal_stmts = []
             stack_advance_stmts = []
@@ -496,18 +498,19 @@ def reverse_diff(diff_func_id : str,
             mutated_forward = tmp_declares + mutated_forward
 
 
-            # Reverse pass
-            self.adj_count = 0
-            self.in_assign = False
-            self.adj_declaration = []
-            reversed_body = [self.mutate_stmt(stmt) for stmt in reversed(node.body)]
-            reversed_body = irmutator.flatten(reversed_body)
-
+            # # Reverse pass
+            # self.adj_count = 0
+            # self.in_assign = False
+            # self.adj_declaration = []
+            # reversed_body = [self.mutate_stmt(stmt) for stmt in reversed(node.body)]
+            # reversed_body = irmutator.flatten(reversed_body)
+            
             return loma_ir.FunctionDef(\
                 diff_func_id,
                 new_args,
-                mutated_forward + self.adj_declaration + reversed_body,
-                node.is_simd,
+                # mutated_forward + self.adj_declaration + reversed_body,
+                mutated_forward,
+                True,
                 ret_type = None,
                 lineno = node.lineno)
 
