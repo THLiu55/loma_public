@@ -41,8 +41,8 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
 
         self.tab_count += 1
 
-        self.emit_tabs()
-        self.code +=  "MPI_Init(NULL, NULL);\n"
+        # self.emit_tabs()
+        # self.code +=  "MPI_Init(NULL, NULL);\n"
 
         # 插入 rank / size
 
