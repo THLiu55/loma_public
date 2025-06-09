@@ -244,27 +244,25 @@ static float cl_atomic_add(volatile __global float *p, float val) {
                                   code,
                                   kernel_names)
     elif target == 'mpi':
-        # 1) 生成代码
+        # MPI Compiler
         code = codegen_mpi.codegen_mpi(structs, funcs)
 
         print('Generated MPI C code:')
         print(code)
 
-        # 2) 编译 —— Linux/Mac 用 mpicc；Windows 用户请改用 MS-MPI cl/link 路径
         if output_filename is None:
             raise ValueError("For target='mpi' you must give output_filename")
 
         if platform.system() == 'Windows':
-            # MS-MPI (假设 cl.exe 与 mpi.lib 已在 PATH)
+            # Windows — Use cl.exe and link.exe
             tmp_c_filename = '_tmp_mpi.c'
             with open(tmp_c_filename, 'w') as f: f.write(code)
             obj_filename = output_filename + '.o'
-            # 编译
             log = run(['cl.exe', '/std:c11', '/c', '/O2',
                        f'/Fo:{obj_filename}', tmp_c_filename],
                       encoding='utf-8', capture_output=True)
             if log.returncode: print(log.stderr)
-            # 链接
+            # Generate the exports
             exports = [f'/EXPORT:{f.id}' for f in funcs.values()]
             log = run(['link.exe', '/DLL', '/NOLOGO',
                        f'/OUT:{output_filename}', *exports,
@@ -274,7 +272,7 @@ static float cl_atomic_add(volatile __global float *p, float val) {
             os.remove(tmp_c_filename)
 
         else:
-            # Linux / macOS — 用 mpicc
+            # Linux / macOS — Use mpicc
             log = run(['mpicc', '-shared', '-fPIC',
                        '-x', 'c', '-', '-O2',
                        '-o', output_filename],
@@ -282,7 +280,7 @@ static float cl_atomic_add(volatile __global float *p, float val) {
                       capture_output=True)
             if log.returncode: print(log.stderr)
 
-        # 3) 动态加载
+        # Load the generated library
         lib = ctypes.CDLL(output_filename)
     else:
         assert False, f'unrecognized compilation target {target}'

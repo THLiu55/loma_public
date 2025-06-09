@@ -302,7 +302,6 @@ class TypeInferencer(irmutator.IRMutator):
         elif call.id == 'scatter':
             if len(args) != 2:
                 raise error.CallTypeMismatch(call)
-
             inf_type = None
         elif call.id == 'gather':
             if len(args) != 2:

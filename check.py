@@ -270,8 +270,12 @@ def check_call_in_call_stmt(node : loma_ir.func,
                 node.id == 'pow' or \
                 node.id == 'thread_id' or \
                 node.id == 'atomic_add' or \
-                node.id == 'mpi_total_size' or \
-                node.id == 'mpi_chunk_size':
+                node.id == 'mpi_rank' or \
+                node.id == 'mpi_size' or \
+                node.id == 'init_mpi_env' or \
+                node.id == 'mpi_chunk_size' or \
+                node.id == 'scatter' or \
+                node.id == 'gather':
                 return
 
             if not self.in_call_stmt:

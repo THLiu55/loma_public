@@ -308,16 +308,10 @@ def forward_diff(diff_func_id : str,
                 case 'sin':
                     assert len(new_args) == 1
                     val, dval = new_args[0]
-                    sin = loma_ir.Call(\
-                        'sin',
-                        [val],
-                        lineno = node.lineno,
-                        t = node.t)
-                    cos = loma_ir.Call(\
-                        'cos',
-                        [val],
-                        lineno = node.lineno,
-                        t = node.t)
+                    sin = loma_ir.Call('sin', [val],
+                        lineno = node.lineno, t = node.t)
+                    cos = loma_ir.Call('cos', [val],
+                        lineno = node.lineno, t = node.t)
                     return sin, loma_ir.BinaryOp(\
                         loma_ir.Mul(),
                         cos,
@@ -463,6 +457,29 @@ def forward_diff(diff_func_id : str,
                         lineno = node.lineno,
                         t = node.t)
                     return ret, None
+                case 'mpi_rank':
+                    print("Inside mutate_call: mpi_rank")
+                    print(node)
+                    return node
+                case 'mpi_size':
+                    return node
+                case 'init_mpi_env':
+                    return node
+                case 'mpi_chunk_size':
+                    assert len(new_args) == 0
+                    return loma_ir.Call('mpi_chunk_size',
+                        node.args, lineno = node.lineno), 0
+                case 'scatter':
+                    print(f"Length of scatter functions' args  {len(new_args)}")
+                    print(f"Scatter args: {new_args}")
+                    print(f"Scatter node args: {node.args}")
+                    return loma_ir.Call('scatter',
+                        [new_args[0][0], new_args[1][0]],
+                        lineno = node.lineno)
+                case 'gather':
+                    return loma_ir.Call('gather',
+                        [new_args[0][0], new_args[1][0]],
+                        lineno = node.lineno)
                 case default:
                     final_args = []
                     original_func = funcs[node.id]

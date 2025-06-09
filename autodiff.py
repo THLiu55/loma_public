@@ -226,7 +226,13 @@ class CallFuncVisitor(irvisitor.IRVisitor):
             node.id == 'int2float' or \
             node.id == 'float2int' or \
             node.id == 'thread_id' or \
-            node.id == 'atomic_add':
+            node.id == 'atomic_add' or \
+            node.id == 'mpi_rank' or \
+            node.id == 'mpi_size' or \
+            node.id == 'mpi_chunk_size' or \
+            node.id == 'init_mpi_env' or \
+            node.id == 'scatter' or \
+            node.id == 'gather':
             return
 
         self.called_func_ids.add(node.id)

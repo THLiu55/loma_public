@@ -39,8 +39,6 @@ def annotation_to_type(node) -> loma_ir.type:
         loma type
     """
 
-    log('annotation_to_type', f'node: {ast.dump(node)}')
-
     match node:
         case ast.Name():
             if node.id == 'int':

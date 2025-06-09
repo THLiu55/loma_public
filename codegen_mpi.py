@@ -3,6 +3,7 @@ import codegen_c
 import _asdl.loma as loma_ir
 import compiler
 from reverse_diff import random_id_generator
+from codegen_c import CCodegenVisitor
 
 # ------------  Code-gen Visitor  ------------
 class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
@@ -41,8 +42,8 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
 
         self.tab_count += 1
 
-        self.emit_tabs()
-        self.code +=  "MPI_Init(NULL, NULL);\n"
+        # self.emit_tabs()
+        # self.code +=  "MPI_Init(NULL, NULL);\n"
 
         # 插入 rank / size
 
@@ -165,8 +166,13 @@ def codegen_mpi(structs: dict[str, loma_ir.Struct],
 
     # -------- function bodies --------
     for f in funcs.values():
-        vis = OpenMPICodegenVisitor(funcs)
-        vis.visit_function(f)
-        code += vis.code + '\n'
+        if f.is_simd:
+            vis = OpenMPICodegenVisitor(funcs)
+            vis.visit_function(f)
+            code += vis.code + '\n'
+        else:
+            vis = CCodegenVisitor(funcs)
+            vis.visit_function(f)
+            code += vis.code + '\n'
 
     return code
