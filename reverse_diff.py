@@ -508,9 +508,8 @@ def reverse_diff(diff_func_id : str,
             return loma_ir.FunctionDef(\
                 diff_func_id,
                 new_args,
-                # mutated_forward + self.adj_declaration + reversed_body,
-                mutated_forward,
-                True,
+                mutated_forward + self.adj_declaration + reversed_body,
+                node.is_simd,
                 ret_type = None,
                 lineno = node.lineno)
 
@@ -579,8 +578,14 @@ def reverse_diff(diff_func_id : str,
             return loma_ir.IfElse(node.cond, then_stmts, else_stmts, lineno = node.lineno)
 
         def mutate_call_stmt(self, node):
-            if node.call.id in {'atomic_add', 'mpi_rank', 'mpi_size', 'mpi_chunk_size', 'init_mpi_env', 'scatter', 'gather'}:
-                return [node]
+            if node.call.id in {'mpi_rank', 'mpi_size', 'init_mpi_env'}:
+                return []
+            if node.call.id in {'scatter', 'gather'}:
+                id = 'scatter' if node.call.id == 'gather' else 'gather'
+                args = [self.var_to_dvar[node.call.args[1].id], self.var_to_dvar[node.call.args[0].id]]
+                args = [loma_ir.Var(v) for v in args]
+                return [loma_ir.CallStmt(loma_ir.Call(id, args, t = node.call.t), lineno = node.lineno)]
+            
             if node.call.id == 'atomic_add':
                 target = var_to_differential(node.call.args[1], self.var_to_dvar)
                 val = var_to_differential(node.call.args[0], self.var_to_dvar)
