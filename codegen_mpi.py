@@ -4,16 +4,18 @@ import _asdl.loma as loma_ir
 import compiler
 from reverse_diff import random_id_generator
 from codegen_c import CCodegenVisitor
+from mpi_utils import get_flatten_info
+from mpi_utils import emit_mpi_type_definition  
+
 
 # ------------  Code-gen Visitor  ------------
 class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
     """
-    负责把 Loma IR 中的函数转换成 OpenMPI 风格的并行 C 代码。
-    基本思路：
-        * 所有函数仍然是普通 C 函数（无 __kernel / __global）
-        * 在线程 ID 处插入 MPI 的 rank
-        * 在函数开头插入 rank/size 变量与 MPI_Comm_rank/size
-        * atomic_add ➜ 简单 +=（如需严格原子性可再插入 MPI_Reduce）
+    Interpret loma IR and generate OpenMPI C code.
+    Basic features:
+        * All functions are still normal C fcuntions
+        * Supports some self defined MPI functions to run
+        * Use init_mpi_env(rank, nproc) to initialize MPI environment
     """
 
     def __init__(self, func_defs):
@@ -45,6 +47,9 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
         # self.emit_tabs()
         # self.code +=  "MPI_Init(NULL, NULL);\n"
 
+        # Register all mpi types
+        self.emit_tabs()
+        self.code += '_register_all_mpi_types();\n'
         # 插入 rank / size
 
         # 处理函数体
@@ -76,18 +81,18 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
 
             code = f"\tint* {self.sendcounts_var} = NULL;\n"
             code += f"\tint* {self.displs_var} = NULL;\n"
-            code += f"\t        int {self.mpi_base_var} = {self.total_size_var} / {node.args[1].id} ;\n"
-            code += f"\t        int {self.mpi_extra_var} = {self.total_size_var} % {node.args[1].id};\n"
+            code += f"\tint {self.mpi_base_var} = {self.total_size_var} / {node.args[1].id} ;\n"
+            code += f"\tint {self.mpi_extra_var} = {self.total_size_var} % {node.args[1].id};\n"
             code += f"\tint {self.recv_counts_var} =  {self.mpi_base_var} + ({node.args[0].id} < {self.mpi_extra_var}  ? 1 : 0);\n"
             code += f"\tif ({node.args[0].id} == 0) {{\n"
-            code += f"\t        {self.sendcounts_var} = malloc({node.args[1].id} * sizeof(int));\n"
-            code += f"\t         {self.displs_var}      = malloc({node.args[1].id} * sizeof(int));\n"
-            code += "\t        int offset = 0;\n"
-            code += f"\t        for (int i = 0; i < {node.args[1].id}; i++) {{\n"
-            code += f"\t            {self.sendcounts_var}[i] = {self.mpi_base_var} + (i < {self.mpi_extra_var}  ? 1 : 0);\n"
-            code += f"\t             {self.displs_var}[i] = offset;\n"
-            code += f"\t            offset += {self.sendcounts_var}[i];\n"
-            code += "\t        }\n"
+            code += f"\t\t{self.sendcounts_var} = malloc({node.args[1].id} * sizeof(int));\n"
+            code += f"\t\t{self.displs_var}      = malloc({node.args[1].id} * sizeof(int));\n"
+            code += "\t\tint offset = 0;\n"
+            code += f"\t\tfor (int i = 0; i < {node.args[1].id}; i++) {{\n"
+            code += f"\t\t{self.sendcounts_var}[i] = {self.mpi_base_var} + (i < {self.mpi_extra_var}  ? 1 : 0);\n"
+            code += f"\t\t{self.displs_var}[i] = offset;\n"
+            code += f"\t\toffset += {self.sendcounts_var}[i];\n"
+            code += "\t\t}\n"
             code += "\t    }"
             return code
         match node:
@@ -104,27 +109,49 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
                 elif node.id == 'mpi_total_size':
                     return f'{self.total_size_var}'
                 elif node.id == 'scatter':
-                    # global_arr, local, total_size
-                    src = self.visit_expr(node.args[0])   # global_arr
-                    dst = self.visit_expr(node.args[1])   # local
+                    src    = self.visit_expr(node.args[0])
+                    dst    = self.visit_expr(node.args[1])
+                    elem_ty = node.args[0].t.t
 
-                    # 生成：MPI_Scatterv(...)
+                    if isinstance(elem_ty, loma_ir.Struct):
+                        mpi_t = f"mpi_t_{elem_ty.id}"
+                    else:
+                        _, prim, _ = get_flatten_info(elem_ty)
+                        mpi_t = prim
+
                     return (
-                        f'MPI_Scatterv('
-                        f'{src}, {self.sendcounts_var}, {self.displs_var}, MPI_FLOAT, '
-                        f'{dst}, {self.recv_counts_var}, MPI_FLOAT, '
-                        f'0, MPI_COMM_WORLD)'
+                        f"MPI_Scatterv({src}, "
+                        f"{self.sendcounts_var}, "
+                        f"{self.displs_var}, "
+                        f"{mpi_t}, "
+                        f"{dst}, "
+                        f"{self.recv_counts_var}, "
+                        f"{mpi_t}, "
+                        f"0, MPI_COMM_WORLD)"
                     )
+
                 elif node.id == 'gather':
-                    # gather(local, global_arr, total_size)
-                    src = self.visit_expr(node.args[0])   # local
-                    dst = self.visit_expr(node.args[1])   # global_arr
+                    src     = self.visit_expr(node.args[0])
+                    dst     = self.visit_expr(node.args[1])
+                    elem_ty = node.args[1].t.t
+
+                    if isinstance(elem_ty, loma_ir.Struct):
+                        mpi_t = f"mpi_t_{elem_ty.id}"
+                    else:
+                        _, prim, _ = get_flatten_info(elem_ty)
+                        mpi_t = prim
+
                     return (
-                        f'MPI_Gatherv('
-                        f'{src}, {self.recv_counts_var}, MPI_FLOAT, '
-                        f'{dst}, {self.sendcounts_var}, {self.displs_var}, MPI_FLOAT, '
-                        f'0, MPI_COMM_WORLD)'
+                        f"MPI_Gatherv({src}, "
+                        f"{self.recv_counts_var}, "
+                        f"{mpi_t}, "
+                        f"{dst}, "
+                        f"{self.sendcounts_var}, "
+                        f"{self.displs_var}, "
+                        f"{mpi_t}, "
+                        f"0, MPI_COMM_WORLD)"
                     )
+
                 elif node.id == 'mpi_chunk_size':
                     return f'({self.recv_counts_var})'
 
@@ -150,6 +177,24 @@ def codegen_mpi(structs: dict[str, loma_ir.Struct],
         for m in s.members:
             code += f'    {codegen_c.type_to_string(m.t)} {m.id};\n'
         code += f'}} {s.id};\n\n'
+
+    
+    # -------- extern declarations for MPI_Datatype --------
+    # ADDED: 向 C 代码里声明所有 mpi_t_<StructName>
+    for s in ctype_structs:
+        code += f'MPI_Datatype mpi_t_{s.id};\n'
+    code += '\n'
+
+    # -------- _register_all_mpi_types() 函数定义 --------
+    # ADDED: 只执行一次的全局注册函数
+    code += 'static int _mpi_types_registered = 0;\n'
+    code += 'static void _register_all_mpi_types() {\n'
+    code += '    if (_mpi_types_registered) return;\n'
+    code += '    _mpi_types_registered = 1;\n'
+    # 为每个 struct 调用 emit_mpi_type_definition 生成创建+提交代码
+    for s in ctype_structs:
+        code += '\t' + emit_mpi_type_definition(s) + '\n'
+    code += '}\n\n'
 
     # -------- forward decl --------
     for f in funcs.values():
