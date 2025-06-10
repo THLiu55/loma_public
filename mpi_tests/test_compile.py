@@ -13,7 +13,7 @@ mpi4py.rc.initialize = False
 
 if __name__ == '__main__':
     print("Compiling MPI code...")
-    with open('loma_code/scatter_gather.py', 'r') as f:
+    with open('loma_code/scatter_gather_rev.py', 'r') as f:
         _, lib = compiler.compile(
             f.read(),
             target='mpi',

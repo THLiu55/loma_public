@@ -499,11 +499,11 @@ def reverse_diff(diff_func_id : str,
 
 
             # # Reverse pass
-            # self.adj_count = 0
-            # self.in_assign = False
-            # self.adj_declaration = []
-            # reversed_body = [self.mutate_stmt(stmt) for stmt in reversed(node.body)]
-            # reversed_body = irmutator.flatten(reversed_body)
+            self.adj_count = 0
+            self.in_assign = False
+            self.adj_declaration = []
+            reversed_body = [self.mutate_stmt(stmt) for stmt in reversed(node.body)]
+            reversed_body = irmutator.flatten(reversed_body)
             
             return loma_ir.FunctionDef(\
                 diff_func_id,
@@ -579,12 +579,13 @@ def reverse_diff(diff_func_id : str,
             return loma_ir.IfElse(node.cond, then_stmts, else_stmts, lineno = node.lineno)
 
         def mutate_call_stmt(self, node):
+            if node.call.id in {'atomic_add', 'mpi_rank', 'mpi_size', 'mpi_chunk_size', 'init_mpi_env', 'scatter', 'gather'}:
+                return [node]
             if node.call.id == 'atomic_add':
                 target = var_to_differential(node.call.args[1], self.var_to_dvar)
                 val = var_to_differential(node.call.args[0], self.var_to_dvar)
                 ret = [loma_ir.Assign(target,
                                       loma_ir.BinaryOp(loma_ir.Add(), target, val))]
-                
                 return ret
             original_func = funcs[node.call.id]
             stmt = []
