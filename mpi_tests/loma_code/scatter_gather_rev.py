@@ -1,5 +1,5 @@
 @simd                             
-def scatter_process_gather(global_arr : Out[Array[float]]):
+def scatter_process_gather(global_arr : In[Array[float]]):
     rank  : int
     mpi_rank(rank)
     nproc : int
