@@ -6,6 +6,7 @@ import check
 import codegen_c
 import codegen_ispc
 import codegen_opencl
+import codegen_mpi
 import inspect
 import os
 import parser
@@ -242,6 +243,45 @@ static float cl_atomic_add(volatile __global float *p, float val) {
                                   opencl_command_queue,
                                   code,
                                   kernel_names)
+    elif target == 'mpi':
+        # MPI Compiler
+        code = codegen_mpi.codegen_mpi(structs, funcs)
+
+        print('Generated MPI C code:')
+        print(code)
+
+        if output_filename is None:
+            raise ValueError("For target='mpi' you must give output_filename")
+
+        if platform.system() == 'Windows':
+            # Windows — Use cl.exe and link.exe
+            tmp_c_filename = '_tmp_mpi.c'
+            with open(tmp_c_filename, 'w') as f: f.write(code)
+            obj_filename = output_filename + '.o'
+            log = run(['cl.exe', '/std:c11', '/c', '/O2',
+                       f'/Fo:{obj_filename}', tmp_c_filename],
+                      encoding='utf-8', capture_output=True)
+            if log.returncode: print(log.stderr)
+            # Generate the exports
+            exports = [f'/EXPORT:{f.id}' for f in funcs.values()]
+            log = run(['link.exe', '/DLL', '/NOLOGO',
+                       f'/OUT:{output_filename}', *exports,
+                       obj_filename, 'msmpi.lib'],
+                      encoding='utf-8', capture_output=True)
+            if log.returncode: print(log.stderr)
+            os.remove(tmp_c_filename)
+
+        else:
+            # Linux / macOS — Use mpicc
+            log = run(['mpicc', '-shared', '-fPIC',
+                       '-x', 'c', '-', '-O2',
+                       '-o', output_filename],
+                      input=code, encoding='utf-8',
+                      capture_output=True)
+            if log.returncode: print(log.stderr)
+
+        # Load the generated library
+        lib = ctypes.CDLL(output_filename)
     else:
         assert False, f'unrecognized compilation target {target}'
 
