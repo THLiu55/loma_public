@@ -640,7 +640,7 @@ def reverse_diff(diff_func_id : str,
 
 
             new_body = []
-            for stmt in node.body:
+            for stmt in reversed(node.body):
                 if isinstance(stmt, loma_ir.While):
                     next_ctr_ptr = loma_ir.Var('ctr' + str(self.ctr_idx + 1) + '_ptr', t = loma_ir.Int())
                     new_body.append(loma_ir.Assign(next_ctr_ptr,
