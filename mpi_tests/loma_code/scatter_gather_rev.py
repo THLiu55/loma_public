@@ -24,3 +24,5 @@ def scatter_process_gather(global_arr : In[Array[float]]):
 
     # ③ GATHER：把处理结果收回根进程
     gather(local, global_arr)
+
+rev_scatter_gather = rev_diff(scatter_process_gather)
