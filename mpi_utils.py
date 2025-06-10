@@ -1,4 +1,5 @@
 from _asdl.loma import Float, Int, Array, Struct
+import _asdl.loma as loma_ir
 
 def get_flatten_info(loma_ty):
     """
@@ -28,11 +29,6 @@ def get_flatten_info(loma_ty):
         if ok_all and all(p == prims[0] for p in prims):
             return total, prims[0], True
     return None, None, False
-
-
-# mpi_utils.py
-
-import _asdl.loma as loma_ir
 
 def emit_mpi_type_definition(s: loma_ir.Struct) -> str:
     """
@@ -71,7 +67,6 @@ def emit_mpi_type_definition(s: loma_ir.Struct) -> str:
         # contiguous block of total_count MPI_FLOATs
         lines.append(f"MPI_Type_contiguous({total_count}, MPI_FLOAT, &{mpivar});")
     else:
-        # build a struct type
         n = len(s.members)
         # block lengths
         bls = ", ".join(
@@ -80,7 +75,6 @@ def emit_mpi_type_definition(s: loma_ir.Struct) -> str:
         )
         # displacements
         disps = ", ".join(f"offsetof({name},{m.id})" for m in s.members)
-        # element types
         types = []
         for m in s.members:
             t = m.t

@@ -1,4 +1,3 @@
-// test_main_shared.c
 #include <stdio.h>
 #include <mpi.h>
 

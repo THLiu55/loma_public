@@ -4,7 +4,7 @@
 #include <math.h>
 #include <time.h>
 
-/* 声明外部函数；链接时由 libscatter_process_gather.so / libscatter_process_gather_rev.so 提供 */
+/* Declare external functions; provided by libscatter_process_gather.so / libscatter_process_gather_rev.so at link time */
 extern void scatter_process_gather(float *global_arr, int total_size);
 extern void rev_scatter_gather(float *global_arr, float *dglobal_arr, int total_size);
 
@@ -16,17 +16,17 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
 
-    const int n = 1000;  /* 必须能被 nproc 整除 */
+    const int n = 1000;  /* Must be divisible by the number of processes */
     if (n % nproc != 0) {
         if (rank == 0)
-            fprintf(stderr, "n=%d 不能被进程数 %d 整除\n", n, nproc);
+            fprintf(stderr, "n=%d cannot be evenly divided by number of processes %d\n", n, nproc);
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    /* 1. 前向测试：global[i] * 2 */
+    /* Forward test: */
     float *global = NULL, *expect_fwd = NULL;
     if (rank == 0) {
-        global    = malloc(n * sizeof(float));
+        global     = malloc(n * sizeof(float));
         expect_fwd = malloc(n * sizeof(float));
         srand((unsigned)time(NULL));
         for (int i = 0; i < n; ++i) {
@@ -34,11 +34,11 @@ int main(int argc, char **argv)
             expect_fwd[i] = global[i] * 2.0f;
         }
     }
-    /* 调用前向 */
+    /* Call forward pass */
     scatter_process_gather(global, n);
     MPI_Barrier(MPI_COMM_WORLD);
 
-    /* 验证前向结果 */
+    /* Verify forward result */
     if (rank == 0) {
         int ok = 1;
         for (int i = 0; i < n; ++i) {
@@ -53,20 +53,20 @@ int main(int argc, char **argv)
         free(expect_fwd);
     }
 
-    /* 2. 逆向测试：对输出 dL/dy 设成 1，看是否能得到 dL/dx = 2 */
+    /* Reverse test */
     float *dglobal = malloc(n * sizeof(float));
     float *expect_rev = malloc(n * sizeof(float));
-    /* 在所有进程上初始化 adjoint 数组，并构造期望值 */
+    /* Initialize the adjoint array on all processes, and prepare expected results */
     for (int i = 0; i < n; ++i) {
-        dglobal[i]    = 1.0f;        /* 假设 dL/dy = 1 */
-        expect_rev[i] = 2.0f;        /* 对 y = 2*x，dL/dx = 2*dL/dy = 2 */
+        dglobal[i]    = 1.0f;        /* Assume dL/dy = 1 */
+        expect_rev[i] = 2.0f;        /* For y = 2*x, dL/dx = 2*dL/dy = 2 */
     }
 
-    /* 调用逆向 */
+    /* Call reverse pass */
     rev_scatter_gather(global, dglobal, n);
     MPI_Barrier(MPI_COMM_WORLD);
 
-    /* 验证逆向结果 */
+    /* Verify reverse result */
     if (rank == 0) {
         int ok = 1;
         for (int i = 0; i < n; ++i) {

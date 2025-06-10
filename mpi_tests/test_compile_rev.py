@@ -17,6 +17,6 @@ if __name__ == '__main__':
         _, lib = compiler.compile(
             f.read(),
             target='mpi',
-            output_filename='mpi_code_test/libscatter_gather_rev'  # 会生成 libscatter_process_gather.so
+            output_filename='mpi_code_test/libscatter_gather_rev'  # libscatter_process_gather.so
         )
     print("MPI code compiled successfully.")

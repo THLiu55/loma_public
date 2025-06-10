@@ -1,4 +1,3 @@
-# codegen_mpi.py
 import codegen_c
 import _asdl.loma as loma_ir
 import compiler
@@ -23,9 +22,7 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
         self.rank_var = "rank"
         self.size_var = "size"
 
-    # ---------- function ----------
     def visit_function_def(self, node):
-        # 函数签名
         self.total_size_var = '_mpi_total_size_' + random_id_generator(1)
         self.code += f'{codegen_c.type_to_string(node.ret_type)} {node.id}('
         for i, arg in enumerate(node.args):
@@ -50,9 +47,7 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
         # Register all mpi types
         self.emit_tabs()
         self.code += '_register_all_mpi_types();\n'
-        # 插入 rank / size
 
-        # 处理函数体
         for stmt in node.body:
             self.visit_stmt(stmt)
 
@@ -62,7 +57,6 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
         self.tab_count -= 1
         self.emit_tabs(); self.code += '}\n'
 
-    # ---------- helper ----------
     def is_output_arg(self, node):
         match node:
             case loma_ir.Var():           return node.id in self.output_args
@@ -70,7 +64,6 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
             case loma_ir.StructAccess():  return self.is_output_arg(node.struct)
         return False
 
-    # ---------- expression ----------
     def visit_expr(self, node):
         if isinstance(node, loma_ir.Call) and node.id == 'init_mpi_env':
             self.sendcounts_var = 'sendcounts_' + random_id_generator()
@@ -159,19 +152,17 @@ class OpenMPICodegenVisitor(codegen_c.CCodegenVisitor):
         return super().visit_expr(node)
 
 
-# ------------  Top-level code-gen  ------------
 def codegen_mpi(structs: dict[str, loma_ir.Struct],
                 funcs  : dict[str, loma_ir.func]) -> str:
     """
-    把结构体 + 函数 IR 转成 OpenMPI C 源码字符串
+    Generate C code that defines MPI types for all structs and implements
+    the functions in the given loma IR code.
     """
     code = ''
-    # 头文件
     code += '#include <mpi.h>\n#include <math.h>\n#include <stdlib.h>\n\n'
 
     ctype_structs = compiler.topo_sort_structs(structs)
 
-    # -------- structs --------
     for s in ctype_structs:
         code += f'typedef struct {s.id} {{\n'
         for m in s.members:
@@ -179,24 +170,23 @@ def codegen_mpi(structs: dict[str, loma_ir.Struct],
         code += f'}} {s.id};\n\n'
 
     
-    # -------- extern declarations for MPI_Datatype --------
-    # ADDED: 向 C 代码里声明所有 mpi_t_<StructName>
+    # extern declarations for MPI_Datatype 
+    # We declare MPI_Datatype variables for each struct
     for s in ctype_structs:
         code += f'MPI_Datatype mpi_t_{s.id};\n'
     code += '\n'
 
-    # -------- _register_all_mpi_types() 函数定义 --------
-    # ADDED: 只执行一次的全局注册函数
+    # Add _register_all_mpi_types()
+    # We will register all MPI types in this function
     code += 'static int _mpi_types_registered = 0;\n'
     code += 'static void _register_all_mpi_types() {\n'
     code += '    if (_mpi_types_registered) return;\n'
     code += '    _mpi_types_registered = 1;\n'
-    # 为每个 struct 调用 emit_mpi_type_definition 生成创建+提交代码
     for s in ctype_structs:
         code += '\t' + emit_mpi_type_definition(s) + '\n'
     code += '}\n\n'
 
-    # -------- forward decl --------
+    # forward decl 
     for f in funcs.values():
         code += f'{codegen_c.type_to_string(f.ret_type)} {f.id}('
         for i, arg in enumerate(f.args):
@@ -209,7 +199,6 @@ def codegen_mpi(structs: dict[str, loma_ir.Struct],
         code += ');\n'
     code += '\n'
 
-    # -------- function bodies --------
     for f in funcs.values():
         if f.is_simd:
             vis = OpenMPICodegenVisitor(funcs)
